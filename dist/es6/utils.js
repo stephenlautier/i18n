@@ -1,8 +1,10 @@
-import {Resolver} from 'aurelia-dependency-injection';
+import {resolver} from 'aurelia-dependency-injection';
 
 export let extend = (destination, source) => {
-  for (let property in source)
+  for (let property in source) {
     destination[property] = source[property];
+  }
+
   return destination;
 };
 
@@ -24,15 +26,15 @@ export let assignObjectToKeys = (root, obj) => {
   return opts;
 };
 
-export class LazyOptional extends Resolver {
+@resolver()
+export class LazyOptional {
   constructor(key) {
-    super();
     this.key = key;
   }
 
   get(container) {
     return () => {
-      if (container.hasHandler(this.key, false)) {
+      if (container.hasResolver(this.key, false)) {
         return container.get(this.key);
       }
       return null;

@@ -17,13 +17,15 @@ Under the hood it uses the [i18next](http://i18next.com/) library.
   - [Getting the active locale](#getting-the-active-locale)
   - [Translating via code](#translating-via-code)
   - [Translating via html attributes](#translating-via-html-attributes)
-  - [Translating with the TValueConverter](#translating-with-the-tvalueconverter)  
+  - [Translating with the TValueConverter](#translating-with-the-tvalueconverter)
+  - [Translating with the TBindingBehavior](#translating-with-the-tbindingbehavior)  
   - [Complex objects for variables](#complex-objects-for-variables)
   - [Formatting numbers via code](#formatting-numbers-via-code)
   - [Formatting numbers with NfValueConverter](#formatting-numbers-with-nfvalueconverter)  
   - [Formatting dates via code](#formatting-dates-via-code)
   - [Formatting dates with DfValueConverter](#formatting-dates-with-dfvalueconverter)
   - [Rendering relative time](#rendering-relative-time)
+- [Bundling](#bundling)
 - [CLI Integration](#cli-integration)
 - [Running the unit tests](#running-the-unit-tests)
 
@@ -45,7 +47,7 @@ jspm install aurelia-i18n
   ```
 3. Create folder `locale` in your projects root
 4. For each locale create a new folder with it's name (e.g. `en`, `de`, ...)
-5. In those subfolders create a file named `translation.json` which contains your language specific translations. Below you can find a sample `en-EN` translation file. The full potential of i18next is achieved through a specific translation-file schema. Consult the [i18next docs](http://i18next.com/pages/doc_features.html) to find out more about it.
+5. In those subfolders create a file named `translation.json` which contains your language specific translations. Below you can find a sample `en-EN` translation file. The full potential of i18next is achieved through a specific translation-file schema. Consult the [i18next docs](http://i18next.com/docs/) to find out more about it.
 
 ```javascript
 {
@@ -316,6 +318,7 @@ This will be picked up by the CLI when translations are extracted from the sourc
 
 #### Passing parameters to the attribute
 In order to use parameters for replaceable parts in your translation key, you can provide an additional `t-params` attribute and bind it to the object containing the replacement values.
+Also note that for whatever attribute you registered, the corresponding \*-params attribute will get registered as well automatically.
 
 ```javascript
 // Translation file
@@ -326,7 +329,7 @@ In order to use parameters for replaceable parts in your translation key, you ca
 
 ```markup
 <!-- View -->
-<span t.="[html]paramstest" t-params.bind="params"></span>
+<span t="[html]paramstest" t-params.bind="params"></span>
 ```
 
 ```javascript
@@ -388,6 +391,35 @@ You will find below a few examples of the available [i18next features](http://i1
     </div>
   </section>
 </template>
+```
+
+### Translating with the TBindingBehavior
+The TValueConverter is pretty useful if you prefer a declarative way to enhance DOM elements with i18n support. But it has a lack when it comes to automatically updating itself when changes happen outside, like locale switches. This is what the TBindingBehavior can do. Essentially you do the same thing like with the TValueConverter but use the `&` sign instead of `|` to indicate usage of the binding behavior.
+
+```markup
+<li class="list-group-item">
+  Translation with Variables: <br />
+  ${ 'score' & t: {'score': userScore}}
+</li>
+```
+
+Now aurelia-i18n will automatically emit signals when internal changes happen and you can do so as well by emiting a `aurelia-translation-signal`. The following example depicts how this is done internally when the current locale changes. First you need to get hold of the `BindingSignaler` exported by the `aurelia-templating-resources` module and inject it either in your constructor or via the static `$inject` property. Next when you want to trigger the signal just use the signalers `signal` method and pass it the predefined string. 
+
+```javascript
+import {BindingSignaler} from 'aurelia-templating-resources';
+// inject signaler to constructor ...
+...
+
+setLocale(locale) {
+  return new Promise( resolve => {
+    let oldLocale = this.getLocale();
+    this.i18next.setLng(locale, tr => {
+      this.ea.publish('i18n:locale:changed', { oldValue: oldLocale, newValue: locale });
+      this.signaler.signal('aurelia-translation-signal');
+      resolve(tr);
+    });
+  });
+}
 ```
 
 ### Complex objects for variables
@@ -587,6 +619,36 @@ A more declarative approach is to use the RtValueConverter directly in your HTML
   </ul>
 </div>
 ```
+
+## Bundling
+In case you experience issues with aurelia-i18n in a bundled app, try to set the setup parameter `getAsync` to false:
+
+```javascript
+  import {I18N} from 'aurelia-i18n';
+
+  export function configure(aurelia) {
+    aurelia.use
+      .standardConfiguration()
+      .developmentLogging()
+      .plugin('aurelia-i18n', (instance) => {
+        // adapt options to your needs (see http://i18next.com/pages/doc_init.html)
+        instance.setup({
+          resGetPath : 'locale/__lng__/__ns__.json',
+          lng : 'de',
+          attributes : ['t','i18n'],
+          getAsync : true,
+          sendMissing : false,
+          fallbackLng : 'en',
+          debug : false,
+		  getAsync: false <------------------------------ SET THIS IF YOU EXPERIENCE BUNDLING ISSUES
+        });
+      });
+
+    aurelia.start().then(a => a.setRoot());
+  }
+```  
+
+This forces i18next to load the given resources synchronously and thus can work around issues when the bundled app tries to access translations keys which aren't yet fully loaded.
 
 ## CLI Integration
 

@@ -1,8 +1,6 @@
 'use strict';
 
-Object.defineProperty(exports, '__esModule', {
-  value: true
-});
+exports.__esModule = true;
 
 var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ('value' in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
 
@@ -14,15 +12,16 @@ var _aureliaEventAggregator = require('aurelia-event-aggregator');
 
 var _aureliaTemplating = require('aurelia-templating');
 
+var _aureliaTemplatingResources = require('aurelia-templating-resources');
+
+var _aureliaBinding = require('aurelia-binding');
+
 var _utils = require('./utils');
 
 var TValueConverter = (function () {
-  _createClass(TValueConverter, null, [{
-    key: 'inject',
-    value: function inject() {
-      return [_i18n.I18N];
-    }
-  }]);
+  TValueConverter.inject = function inject() {
+    return [_i18n.I18N];
+  };
 
   function TValueConverter(i18n) {
     _classCallCheck(this, TValueConverter);
@@ -30,12 +29,9 @@ var TValueConverter = (function () {
     this.service = i18n;
   }
 
-  _createClass(TValueConverter, [{
-    key: 'toView',
-    value: function toView(value, options) {
-      return this.service.tr(value, options);
-    }
-  }]);
+  TValueConverter.prototype.toView = function toView(value, options) {
+    return this.service.tr(value, options);
+  };
 
   return TValueConverter;
 })();
@@ -55,13 +51,10 @@ var TParamsCustomAttribute = (function () {
     this.element = element;
   }
 
-  _createClass(TParamsCustomAttribute, [{
-    key: 'valueChanged',
-    value: function valueChanged() {}
-  }]);
+  TParamsCustomAttribute.prototype.valueChanged = function valueChanged() {};
 
   var _TParamsCustomAttribute = TParamsCustomAttribute;
-  TParamsCustomAttribute = (0, _aureliaTemplating.customAttribute)('t-params')(TParamsCustomAttribute) || TParamsCustomAttribute;
+  TParamsCustomAttribute = _aureliaTemplating.customAttribute('t-params')(TParamsCustomAttribute) || TParamsCustomAttribute;
   return TParamsCustomAttribute;
 })();
 
@@ -83,51 +76,84 @@ var TCustomAttribute = (function () {
     this.lazyParams = tparams;
   }
 
-  _createClass(TCustomAttribute, [{
-    key: 'bind',
-    value: function bind() {
-      var _this = this;
+  TCustomAttribute.prototype.bind = function bind() {
+    var _this = this;
 
-      this.params = this.lazyParams();
+    this.params = this.lazyParams();
+    this.timers = [];
 
-      setTimeout(function () {
-        if (_this.params) {
-          _this.params.valueChanged = function (newParams, oldParams) {
-            _this.paramsChanged(_this.value, newParams, oldParams);
-          };
-        }
+    this.timers.push(setTimeout(function () {
+      if (_this.params) {
+        _this.params.valueChanged = function (newParams, oldParams) {
+          _this.paramsChanged(_this.value, newParams, oldParams);
+        };
+      }
 
-        var p = _this.params !== null ? _this.params.value : undefined;
-        _this.subscription = _this.ea.subscribe('i18n:locale:changed', function () {
-          _this.service.updateValue(_this.element, _this.value, p);
-        });
-
-        setTimeout(function () {
-          _this.service.updateValue(_this.element, _this.value, p);
-        });
+      var p = _this.params !== null ? _this.params.value : undefined;
+      _this.subscription = _this.ea.subscribe('i18n:locale:changed', function () {
+        _this.service.updateValue(_this.element, _this.value, p);
       });
+
+      _this.timers.push(setTimeout(function () {
+        _this.service.updateValue(_this.element, _this.value, p);
+      }));
+    }));
+  };
+
+  TCustomAttribute.prototype.paramsChanged = function paramsChanged(newValue, newParams) {
+    this.service.updateValue(this.element, newValue, newParams);
+  };
+
+  TCustomAttribute.prototype.valueChanged = function valueChanged(newValue) {
+    var p = this.params !== null ? this.params.value : undefined;
+    this.service.updateValue(this.element, newValue, p);
+  };
+
+  TCustomAttribute.prototype.unbind = function unbind() {
+    this.timers.forEach(function (t) {
+      return clearTimeout(t);
+    });
+
+    if (this.subscription) {
+      this.subscription.dispose();
     }
-  }, {
-    key: 'paramsChanged',
-    value: function paramsChanged(newValue, newParams) {
-      this.service.updateValue(this.element, newValue, newParams);
-    }
-  }, {
-    key: 'valueChanged',
-    value: function valueChanged(newValue) {
-      var p = this.params !== null ? this.params.value : undefined;
-      this.service.updateValue(this.element, newValue, p);
-    }
-  }, {
-    key: 'unbind',
-    value: function unbind() {
-      this.subscription();
-    }
-  }]);
+  };
 
   var _TCustomAttribute = TCustomAttribute;
-  TCustomAttribute = (0, _aureliaTemplating.customAttribute)('t')(TCustomAttribute) || TCustomAttribute;
+  TCustomAttribute = _aureliaTemplating.customAttribute('t')(TCustomAttribute) || TCustomAttribute;
   return TCustomAttribute;
 })();
 
 exports.TCustomAttribute = TCustomAttribute;
+
+var TBindingBehavior = (function () {
+  _createClass(TBindingBehavior, null, [{
+    key: 'inject',
+    value: [_aureliaTemplatingResources.SignalBindingBehavior],
+    enumerable: true
+  }]);
+
+  function TBindingBehavior(signalBindingBehavior) {
+    _classCallCheck(this, TBindingBehavior);
+
+    this.signalBindingBehavior = signalBindingBehavior;
+  }
+
+  TBindingBehavior.prototype.bind = function bind(binding, source) {
+    this.signalBindingBehavior.bind(binding, source, 'aurelia-translation-signal');
+
+    var sourceExpression = binding.sourceExpression;
+    var expression = sourceExpression.expression;
+    sourceExpression.expression = new _aureliaBinding.ValueConverter(expression, 't', sourceExpression.args, [expression].concat(sourceExpression.args));
+  };
+
+  TBindingBehavior.prototype.unbind = function unbind(binding, source) {
+    binding.sourceExpression.expression = binding.sourceExpression.expression.expression;
+
+    this.signalBindingBehavior.unbind(binding, source);
+  };
+
+  return TBindingBehavior;
+})();
+
+exports.TBindingBehavior = TBindingBehavior;
